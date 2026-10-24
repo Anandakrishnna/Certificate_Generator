@@ -1,0 +1,20 @@
+<svg width="1123" height="794" viewBox="0 0 1123 794" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1123" height="794" fill="#FFFFFF"/>
+  <!-- Modern Geometric Accents -->
+  <path d="M0 0 L260 0 L0 260 Z" fill="#EEF2FF"/>
+  <path d="M0 0 L180 0 L0 180 Z" fill="#E0E7FF"/>
+  <path d="M0 0 L100 0 L0 100 Z" fill="#4F46E5"/>
+
+  <path d="M1123 794 L863 794 L1123 534 Z" fill="#EEF2FF"/>
+  <path d="M1123 794 L943 794 L1123 614 Z" fill="#E0E7FF"/>
+  <path d="M1123 794 L1023 794 L1123 694 Z" fill="#4F46E5"/>
+
+  <!-- Clean Border Frame -->
+  <rect x="40" y="40" width="1043" height="714" rx="8" stroke="#E2E8F0" stroke-width="2"/>
+  <rect x="52" y="52" width="1019" height="690" rx="4" stroke="#4F46E5" stroke-opacity="0.3" stroke-width="1"/>
+
+  <!-- Modern Header -->
+  <text x="561" y="160" text-anchor="middle" font-family="'Helvetica Neue', 'Inter', sans-serif" font-size="14" font-weight="700" fill="#4F46E5" letter-spacing="3">OFFICIAL CERTIFICATE</text>
+  <text x="561" y="200" text-anchor="middle" font-family="'Helvetica Neue', 'Inter', sans-serif" font-size="32" font-weight="800" fill="#0F172A" letter-spacing="1">OF PARTICIPATION</text>
+  <line x1="490" y1="225" x2="632" y2="225" stroke="#4F46E5" stroke-width="3" stroke-linecap="round"/>
+</svg>

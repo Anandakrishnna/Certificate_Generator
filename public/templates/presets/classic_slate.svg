@@ -1,0 +1,25 @@
+<svg width="1123" height="794" viewBox="0 0 1123 794" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1123" height="794" fill="#FCFCFD"/>
+  <!-- Elegant Outer Border -->
+  <rect x="36" y="36" width="1051" height="722" rx="4" stroke="#0F172A" stroke-width="2"/>
+  <!-- Thin Inner Border -->
+  <rect x="46" y="46" width="1031" height="702" rx="2" stroke="#64748B" stroke-width="1" stroke-dasharray="6 4"/>
+  
+  <!-- Corner Ornaments -->
+  <path d="M36 60 H60 V36" stroke="#0F172A" stroke-width="3" fill="none"/>
+  <path d="M1087 60 H1063 V36" stroke="#0F172A" stroke-width="3" fill="none"/>
+  <path d="M36 734 H60 V758" stroke="#0F172A" stroke-width="3" fill="none"/>
+  <path d="M1087 734 H1063 V758" stroke="#0F172A" stroke-width="3" fill="none"/>
+
+  <!-- Watermark Seal Background -->
+  <circle cx="561" cy="397" r="160" stroke="#F1F5F9" stroke-width="1.5" fill="none"/>
+  <circle cx="561" cy="397" r="175" stroke="#F8FAFC" stroke-width="1" fill="none"/>
+
+  <!-- Top Header Graphic / Badge -->
+  <circle cx="561" cy="115" r="32" fill="#0F172A"/>
+  <path d="M553 115 L559 121 L570 109" stroke="#F8FAFC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Default Static Header text -->
+  <text x="561" y="180" text-anchor="middle" font-family="'Georgia', serif" font-size="28" font-weight="700" fill="#0F172A" letter-spacing="4">CERTIFICATE OF RECOGNITION</text>
+  <text x="561" y="210" text-anchor="middle" font-family="'Arial', sans-serif" font-size="12" font-weight="500" fill="#64748B" letter-spacing="2">THIS IS PROUDLY PRESENTED TO</text>
+</svg>
