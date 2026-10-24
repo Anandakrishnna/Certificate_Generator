@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  smtpHost     String?  @default("smtp.gmail.com")
+  smtpPort     Int?     @default(587)
+  smtpUser     String?
+  smtpPass     String?
+  smtpFrom     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  events       Event[]
+}
+
+model Event {
+  id            String        @id @default(uuid())
+  authorId      String
+  author        User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  eventDate     DateTime
+  organizerName String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  participants  Participant[]
+  templates     Template[]
+}
+
+model Participant {
+  id               String          @id @default(uuid())
+  eventId          String
+  event            Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name             String
+  email            String
+  extraFields      String          @default("{}") // Stored as JSON string in SQLite
+  validationStatus String          @default("valid") // valid | invalid | duplicate
+  createdAt        DateTime        @default(now())
+  certificates     Certificate[]
+  emailDeliveries  EmailDelivery[]
+
+  @@unique([eventId, email])
+}
+
+model Template {
+  id            String        @id @default(uuid())
+  eventId       String
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  backgroundUrl String
+  placeholders  String        @default("[]") // JSON array of placeholder objects: { fieldKey, x, y, width, height, font, fontSize, color, align }
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  certificates  Certificate[]
+}
+
+model Certificate {
+  id              String          @id @default(uuid())
+  participantId   String
+  participant     Participant     @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  templateId      String
+  template        Template        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  fileUrlPdf      String
+  fileUrlPng      String
+  certificateUid  String          @unique // Public verification token/UUID
+  generatedAt     DateTime        @default(now())
+  emailDeliveries EmailDelivery[]
+}
+
+model EmailDelivery {
+  id              String      @id @default(uuid())
+  certificateId   String
+  certificate     Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  participantId   String
+  participant     Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  status          String      @default("queued") // queued | sending | sent | failed | retrying
+  attemptCount    Int         @default(0)
+  lastAttemptedAt DateTime?
+  errorMessage    String?
+  sentAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
