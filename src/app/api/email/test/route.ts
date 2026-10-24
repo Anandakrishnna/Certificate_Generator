@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { emailService } from "@/lib/email/email-service";
 import { prisma } from "@/lib/db";
+import { decryptSecret } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,13 +25,14 @@ export async function POST(req: NextRequest) {
       where: { id: session.userId },
     });
 
+    const decryptedPass = user?.smtpPass ? decryptSecret(user.smtpPass) : "";
     const userSmtp =
-      user?.smtpUser && user?.smtpPass
+      user?.smtpUser && decryptedPass
         ? {
             host: user.smtpHost || "smtp.gmail.com",
             port: user.smtpPort || 587,
             user: user.smtpUser,
-            pass: user.smtpPass,
+            pass: decryptedPass,
             from:
               user.smtpFrom ||
               `"${user.name || session.name || "Organizer"}" <${user.smtpUser}>`,

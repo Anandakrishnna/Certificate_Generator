@@ -141,6 +141,10 @@ For quick exploration without registering:
 
 ## 📧 Outgoing Email (Gmail SMTP) Setup
 
+> ⚠️ **CRITICAL NOTE ON EMAIL DELIVERY**:  
+> Without configured SMTP / Gmail credentials, certificates in local development will "send" silently via an in-memory simulated mock provider and **will never reach participants' real mailboxes**.  
+> Always connect a valid 16-character Google App Password or SMTP provider before dispatching certificates. In production environments (`NODE_ENV === "production"`), unconfigured sends are strictly blocked to prevent silent mock delivery.
+
 To send real certificate emails directly from your Gmail address:
 
 1. **Generate a Google App Password**:
@@ -153,7 +157,17 @@ To send real certificate emails directly from your Gmail address:
    - Click **"Configure Gmail / SMTP"**.
    - Your email address will be automatically populated.
    - Paste the 16-character App Password and click **"Save & Activate"**.
+   - The platform will perform an automated pre-flight verification with Google's servers before activating.
    - Click **"Verify with a Test Email"** to confirm instant delivery!
+
+---
+
+## 🗄️ Database: Local SQLite vs. Production Serverless
+
+- **Local Development**: Uses local SQLite (`DATABASE_URL="file:./dev.db"`). Requires zero setup.
+- **Production Serverless (Vercel / Netlify / AWS Lambda)**:  
+  Serverless filesystems are ephemeral and read-only across lambdas. Running SQLite (`file:`) on serverless platforms will wipe credentials and event data across invocations.  
+  To deploy to production, set `DATABASE_URL` to a hosted PostgreSQL instance (e.g. [Neon](https://neon.tech), [Supabase](https://supabase.com)) or [Turso](https://turso.tech). CertifyFlow includes automated startup guards in `src/lib/db.ts` that safely detect and error on ephemeral serverless SQLite usage.
 
 ---
 

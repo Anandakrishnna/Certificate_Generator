@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { verifySmtpConnection } from "@/lib/email/email-service";
+import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,18 +15,27 @@ export async function GET(req: NextRequest) {
       where: { id: session.userId },
     });
 
-    const isConfigured = Boolean(
-      (user?.smtpUser && user?.smtpPass) ||
+    const decryptedPass = user?.smtpPass ? decryptSecret(user.smtpPass) : "";
+    const isUserConfigured = Boolean(user?.smtpUser && decryptedPass);
+    const isSystemConfigured = Boolean(
       (process.env.SMTP_USER && process.env.SMTP_PASS) ||
       process.env.RESEND_API_KEY
     );
 
-    // Pre-fill with the organizer's logged in email address!
+    const isConfigured = isUserConfigured || isSystemConfigured;
+    const provider = isUserConfigured
+      ? "gmail_smtp"
+      : process.env.RESEND_API_KEY
+      ? "resend"
+      : process.env.SMTP_USER
+      ? "gmail_smtp"
+      : "mock";
+
     const effectiveEmail = user?.smtpUser || session.email || "";
 
     return NextResponse.json({
       isConfigured,
-      provider: isConfigured ? "gmail_smtp" : "mock",
+      provider,
       smtpUser: effectiveEmail,
       smtpHost: user?.smtpHost || process.env.SMTP_HOST || "smtp.gmail.com",
       smtpPort: String(user?.smtpPort || process.env.SMTP_PORT || "587"),
@@ -62,22 +73,44 @@ export async function POST(req: NextRequest) {
     const host = smtpHost || "smtp.gmail.com";
     const port = Number(smtpPort) || 587;
     const cleanUser = smtpUser.trim();
-    const cleanPass = smtpPass.trim().replace(/\s+/g, ""); // Strip spaces in 16-character Google App Passwords
+    const cleanPass = smtpPass.trim().replace(/\s+/g, ""); // Strip spaces in 16-character App Passwords
     const from = smtpFrom || `"${session.name || "Organizer"}" <${cleanUser}>`;
 
-    // Persist per-organizer credentials to SQLite database
+    // 1. Pre-flight verification: test credentials before saving!
+    const verifyResult = await verifySmtpConnection({
+      host,
+      port,
+      user: cleanUser,
+      pass: cleanPass,
+    });
+
+    if (!verifyResult.success) {
+      return NextResponse.json(
+        {
+          error:
+            verifyResult.error ||
+            "Failed to authenticate with SMTP server. Please verify your email and 16-character Google App Password.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // 2. Encrypt password at rest using AES-256-GCM
+    const encryptedPassword = encryptSecret(cleanPass);
+
+    // 3. Persist encrypted credentials to SQLite/database
     await prisma.user.update({
       where: { id: session.userId },
       data: {
         smtpHost: host,
         smtpPort: port,
         smtpUser: cleanUser,
-        smtpPass: cleanPass,
+        smtpPass: encryptedPassword,
         smtpFrom: from,
       },
     });
 
-    // Also update current process.env as fallback
+    // 4. Update process.env as fallback
     process.env.SMTP_HOST = host;
     process.env.SMTP_PORT = String(port);
     process.env.SMTP_USER = cleanUser;
@@ -86,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Gmail SMTP activated for ${cleanUser}! Certificates will be dispatched from your address.`,
+      message: `Verified and activated Gmail SMTP for ${cleanUser}! Certificates will be dispatched from your address.`,
       isConfigured: true,
       provider: "gmail_smtp",
       smtpUser: cleanUser,

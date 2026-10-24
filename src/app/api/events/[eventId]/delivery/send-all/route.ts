@@ -29,7 +29,27 @@ export async function POST(
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
-    const { subject, body } = await req.json();
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+    });
+
+    const isUserConfigured = Boolean(user?.smtpUser && user?.smtpPass);
+    const isSystemConfigured = Boolean(
+      (process.env.SMTP_USER && process.env.SMTP_PASS) || process.env.RESEND_API_KEY
+    );
+
+    const { subject, body, allowSimulation } = await req.json();
+
+    if (!isUserConfigured && !isSystemConfigured && !allowSimulation) {
+      return NextResponse.json(
+        {
+          error:
+            "Outgoing email provider is not configured. Please click 'Configure Gmail / SMTP' to connect your credentials before sending certificates.",
+          requiresSmtpSetup: true,
+        },
+        { status: 400 }
+      );
+    }
 
     // 1. Queue deliveries for all participants who have a generated certificate
     let queuedCount = 0;

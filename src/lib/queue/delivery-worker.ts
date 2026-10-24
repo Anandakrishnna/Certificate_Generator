@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { emailService } from "@/lib/email/email-service";
 import { interpolateEmail, formatHtmlEmail, DEFAULT_EMAIL_TEMPLATE } from "@/lib/email/templates";
 import { storage } from "@/lib/storage/local-storage";
+import { decryptSecret } from "@/lib/crypto";
 
 export async function processSingleDelivery(
   deliveryId: string,
@@ -79,13 +80,14 @@ export async function processSingleDelivery(
       ]
     : [];
 
+  const decryptedPass = author?.smtpPass ? decryptSecret(author.smtpPass) : "";
   const authorSmtp =
-    author?.smtpUser && author?.smtpPass
+    author?.smtpUser && decryptedPass
       ? {
           host: author.smtpHost || "smtp.gmail.com",
           port: author.smtpPort || 587,
           user: author.smtpUser,
-          pass: author.smtpPass,
+          pass: decryptedPass,
           from: author.smtpFrom || `"${event.organizerName || author.name}" <${author.smtpUser}>`,
         }
       : undefined;

@@ -85,9 +85,16 @@ export default function DeliveryTrackingPage({
   }, [fetchDeliveryData, fetchEmailSettings]);
 
   const handleSendAll = async () => {
-    setSending(true);
     setError(null);
     setSuccessMessage(null);
+
+    if (!emailSettings?.isConfigured) {
+      setError("Outgoing email is currently in Simulation (Mock) mode! Please connect your Gmail or SMTP credentials before sending real certificates to participants.");
+      setIsSettingsModalOpen(true);
+      return;
+    }
+
+    setSending(true);
 
     try {
       const res = await fetch(`/api/events/${params.eventId}/delivery/send-all`, {
@@ -97,7 +104,12 @@ export default function DeliveryTrackingPage({
       });
 
       const resData = await res.json();
-      if (!res.ok) throw new Error(resData.error || "Failed to dispatch emails");
+      if (!res.ok) {
+        if (resData.requiresSmtpSetup) {
+          setIsSettingsModalOpen(true);
+        }
+        throw new Error(resData.error || "Failed to dispatch emails");
+      }
 
       setSuccessMessage(resData.message || "All certificates dispatched to delivery queue!");
       await fetchDeliveryData();
@@ -192,9 +204,17 @@ export default function DeliveryTrackingPage({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Step 5 of 5</span>
             <Badge variant="outline">Email Delivery & Tracking</Badge>
+            {emailSettings && (
+              <Badge
+                variant={emailSettings.isConfigured ? "success" : "warning"}
+                className="text-[11px] font-semibold"
+              >
+                Provider: {emailSettings.provider === "gmail_smtp" ? "Gmail SMTP (Live)" : emailSettings.provider === "resend" ? "Resend (Live)" : "Mock (Simulated)"}
+              </Badge>
+            )}
           </div>
           <h2 className="text-xl font-bold text-slate-900">Email Delivery Console</h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -561,15 +581,28 @@ export default function DeliveryTrackingPage({
                       </td>
 
                       {/* Delivery Log */}
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 max-w-xs">
                         {isSent && r.sentAt ? (
-                          <span className="text-slate-500 text-[11px]">
-                            Delivered at {new Date(r.sentAt).toLocaleTimeString()}
+                          <span className="text-emerald-700 font-medium text-[11px] flex items-center gap-1">
+                            <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> Delivered at {new Date(r.sentAt).toLocaleTimeString()}
                           </span>
                         ) : r.errorMessage ? (
-                          <span className="text-rose-600 font-medium text-[11px] line-clamp-1" title={r.errorMessage}>
-                            {r.errorMessage}
-                          </span>
+                          <div className="rounded-lg bg-rose-50 border border-rose-200 p-2 text-[11px] text-rose-900 space-y-1">
+                            <div className="font-bold flex items-center gap-1 text-rose-800">
+                              <AlertCircle className="h-3 w-3 flex-shrink-0 text-rose-600" />
+                              <span>SMTP Error</span>
+                            </div>
+                            <div className="font-mono text-[10px] text-rose-800 break-words leading-tight">
+                              {r.errorMessage}
+                            </div>
+                            {(r.errorMessage.includes("535") ||
+                              r.errorMessage.toLowerCase().includes("badcredentials") ||
+                              r.errorMessage.toLowerCase().includes("password not accepted")) && (
+                              <div className="text-[10px] text-rose-700 bg-rose-100/70 rounded p-1 font-medium mt-1">
+                                💡 <strong>Fix:</strong> Google rejected credentials. Please enter a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="underline font-bold">Google App Password</a>.
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-slate-400 text-[11px]">—</span>
                         )}

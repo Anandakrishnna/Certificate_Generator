@@ -147,7 +147,21 @@ export function EmailSettingsModal({
       maxWidth="lg"
     >
       <div className="space-y-5 pt-1">
-        {error && <Alert variant="danger">{error}</Alert>}
+        {error && (
+          <Alert variant="danger">
+            <div className="space-y-1.5">
+              <div className="font-semibold">{error}</div>
+              {(error.includes("535") ||
+                error.toLowerCase().includes("badcredentials") ||
+                error.toLowerCase().includes("password not accepted")) && (
+                <div className="text-xs mt-1 bg-rose-100/70 p-2 rounded text-rose-900">
+                  Google blocked this authentication attempt. Google accounts <strong>do not allow normal passwords</strong> for sending mail.
+                  Please generate a 16-character <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="underline font-bold text-rose-950 inline-flex items-center gap-0.5">Google App Password <ExternalLink className="h-3 w-3" /></a> and paste it above.
+                </div>
+              )}
+            </div>
+          </Alert>
+        )}
         {saveSuccess && <Alert variant="success">{saveSuccess}</Alert>}
         {testSuccess && <Alert variant="success">{testSuccess}</Alert>}
 
@@ -261,7 +275,8 @@ export function EmailSettingsModal({
               Cancel
             </Button>
             <Button type="submit" size="sm" isLoading={loading}>
-              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Save & Activate Credentials
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+              {loading ? "Verifying with SMTP & Saving..." : "Save & Activate Credentials"}
             </Button>
           </div>
         </form>

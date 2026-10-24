@@ -32,10 +32,44 @@ export interface SendEmailResult {
   messageId?: string;
   errorMessage?: string;
   previewUrl?: string;
+  isMock?: boolean;
 }
 
 export interface EmailProvider {
   sendEmail(options: SendEmailOptions): Promise<SendEmailResult>;
+}
+
+/**
+ * Verify SMTP connection & authentication credentials using Nodemailer verify()
+ */
+export async function verifySmtpConnection(
+  config: SmtpConfig
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const host = config.host || "smtp.gmail.com";
+    const port = Number(config.port) || 587;
+    const secure = config.secure ?? (port === 465);
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: {
+        user: config.user,
+        pass: config.pass,
+      },
+    });
+
+    await transporter.verify();
+    return { success: true };
+  } catch (err: any) {
+    const rawError =
+      err.response || err.message || "Failed to authenticate with SMTP server";
+    return {
+      success: false,
+      error: rawError,
+    };
+  }
 }
 
 /**
@@ -86,7 +120,9 @@ export class SmtpEmailProvider implements EmailProvider {
       const from =
         options.from ||
         options.smtpConfig?.from ||
-        (options.smtpConfig?.user ? `"${options.smtpConfig.user.split('@')[0]}" <${options.smtpConfig.user}>` : undefined) ||
+        (options.smtpConfig?.user
+          ? `"${options.smtpConfig.user.split("@")[0]}" <${options.smtpConfig.user}>`
+          : undefined) ||
         process.env.SMTP_FROM ||
         process.env.SMTP_USER ||
         `"CertifyFlow" <noreply@certifyflow.com>`;
@@ -94,7 +130,9 @@ export class SmtpEmailProvider implements EmailProvider {
       const info = await transporter.sendMail({
         from,
         to: options.to,
-        replyTo: options.replyTo || (options.smtpConfig?.user ? options.smtpConfig.user : undefined),
+        replyTo:
+          options.replyTo ||
+          (options.smtpConfig?.user ? options.smtpConfig.user : undefined),
         subject: options.subject,
         text: options.text,
         html: options.html,
@@ -109,12 +147,16 @@ export class SmtpEmailProvider implements EmailProvider {
       return {
         success: true,
         messageId: info.messageId,
+        isMock: false,
       };
     } catch (err: any) {
       console.error(`[Email Delivery Failed] To: ${options.to}`, err);
+      const rawError =
+        err.response || err.message || "Failed to dispatch email via SMTP provider";
       return {
         success: false,
-        errorMessage: err.message || "Failed to dispatch email via SMTP provider",
+        errorMessage: rawError,
+        isMock: false,
       };
     }
   }
@@ -129,7 +171,8 @@ export class ResendEmailProvider implements EmailProvider {
 
   constructor(apiKey: string, from?: string) {
     this.apiKey = apiKey;
-    this.from = from || process.env.RESEND_FROM || "Certificates <onboarding@resend.dev>";
+    this.from =
+      from || process.env.RESEND_FROM || "Certificates <onboarding@resend.dev>";
   }
 
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
@@ -146,8 +189,9 @@ export class ResendEmailProvider implements EmailProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: this.from,
+          from: options.from || this.from,
           to: options.to,
+          reply_to: options.replyTo,
           subject: options.subject,
           html: options.html,
           text: options.text,
@@ -160,23 +204,23 @@ export class ResendEmailProvider implements EmailProvider {
         throw new Error(data.message || `Resend API error: ${res.statusText}`);
       }
 
+      console.log(`[Resend Email Delivered] To: ${options.to} | MessageId: ${data.id}`);
       return {
         success: true,
         messageId: data.id,
+        isMock: false,
       };
     } catch (err: any) {
-      console.error(`[Resend Error] To: ${options.to}`, err);
+      console.error(`[Resend Delivery Failed] To: ${options.to}`, err);
       return {
         success: false,
-        errorMessage: err.message || "Failed to send email via Resend",
+        errorMessage: err.message || "Failed to dispatch email via Resend",
+        isMock: false,
       };
     }
   }
 }
 
-/**
- * Mock Email Provider for local development & automated tests
- */
 export class MockEmailProvider implements EmailProvider {
   private sentEmails: Array<{
     to: string;
@@ -191,7 +235,9 @@ export class MockEmailProvider implements EmailProvider {
     if (options.to.includes("testfail") || options.to.includes("invalid-bounce")) {
       return {
         success: false,
-        errorMessage: "550 5.1.1 Recipient mailbox unavailable / simulated SMTP bounce error",
+        errorMessage:
+          "550 5.1.1 Recipient mailbox unavailable / simulated SMTP bounce error",
+        isMock: true,
       };
     }
 
@@ -207,6 +253,7 @@ export class MockEmailProvider implements EmailProvider {
     return {
       success: true,
       messageId: `mock_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      isMock: true,
     };
   }
 
@@ -216,7 +263,8 @@ export class MockEmailProvider implements EmailProvider {
 }
 
 /**
- * Factory to determine active email provider based on environment variables
+ * Factory to determine active email provider based on environment variables.
+ * In production, throws error if neither SMTP nor Resend is configured.
  */
 function createEmailService(): EmailProvider {
   if (process.env.RESEND_API_KEY) {
@@ -227,6 +275,12 @@ function createEmailService(): EmailProvider {
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     console.log(`Using Real SMTP Email Provider (${process.env.SMTP_HOST || "smtp.gmail.com"})`);
     return new SmtpEmailProvider();
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "No outgoing email provider is configured! Please configure SMTP_USER/SMTP_PASS or connect Gmail in production."
+    );
   }
 
   return new MockEmailProvider();
