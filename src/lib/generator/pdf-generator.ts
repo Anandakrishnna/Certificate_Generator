@@ -53,10 +53,20 @@ export async function generateCertificatePdf(options: GeneratePdfOptions): Promi
     try {
       let imageBuffer: Buffer | null = null;
       let cleanUrl = backgroundUrl.startsWith("/") ? backgroundUrl.slice(1) : backgroundUrl;
-      const localFilePath = path.join(process.cwd(), "public", cleanUrl);
-
-      if (fs.existsSync(localFilePath)) {
-        imageBuffer = await fs.promises.readFile(localFilePath);
+      if (backgroundUrl.startsWith("http://") || backgroundUrl.startsWith("https://")) {
+        try {
+          const res = await fetch(backgroundUrl);
+          if (res.ok) {
+            imageBuffer = Buffer.from(await res.arrayBuffer());
+          }
+        } catch (e) {
+          console.warn("Failed to fetch remote background image:", e);
+        }
+      } else {
+        const localFilePath = path.join(process.cwd(), "public", cleanUrl);
+        if (fs.existsSync(localFilePath)) {
+          imageBuffer = await fs.promises.readFile(localFilePath);
+        }
       }
 
       if (imageBuffer) {
