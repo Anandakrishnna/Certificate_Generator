@@ -531,8 +531,28 @@ export default function DeliveryTrackingPage({
                     <tr key={r.participantId} className="hover:bg-slate-50/60 transition-colors">
                       {/* Recipient */}
                       <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{r.name}</div>
-                        <div className="text-[11px] text-slate-500">{r.email}</div>
+                        <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                          <span>{r.name}</span>
+                          {r.teamName && (
+                            <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-medium">
+                              👥 {r.teamName}
+                            </span>
+                          )}
+                          {r.isLeader && r.teamName && (
+                            <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                              👑 Leader
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          {r.deliveredToLeader ? (
+                            <span className="text-amber-800 font-medium inline-flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                              📬 Delivered to Leader ({r.recipientEmail || r.leaderEmail})
+                            </span>
+                          ) : (
+                            <span>{r.email}</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Certificate ID */}

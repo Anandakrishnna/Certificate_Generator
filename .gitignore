@@ -41,6 +41,10 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+*.tsbuildinfo
+
+# Test and local data exports
+participants_teams.*
 
 # IDE configuration
 .vscode/

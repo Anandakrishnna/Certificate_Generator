@@ -67,6 +67,23 @@ export default function LoginPage() {
               </Alert>
             )}
 
+            <div className="mb-4 p-3 bg-indigo-50/70 border border-indigo-100 rounded-lg flex items-center justify-between text-xs">
+              <div>
+                <p className="font-semibold text-indigo-950">Quick Demo Account</p>
+                <p className="text-[11px] text-indigo-700 font-mono">demo@certifyflow.com / demo1234</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail("demo@certifyflow.com");
+                  setPassword("demo1234");
+                }}
+                className="px-2.5 py-1 text-[11px] font-semibold bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors shadow-xs"
+              >
+                Auto-fill
+              </button>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
                 label="Email Address"
@@ -77,14 +94,30 @@ export default function LoginPage() {
                 required
               />
 
-              <Input
-                label="Password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="password"
+                    className="block text-xs font-semibold text-slate-700 tracking-wide"
+                  >
+                    Password
+                  </label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-500 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
 
               <Button type="submit" className="w-full" isLoading={loading}>
                 Sign In <ArrowRight className="h-4 w-4 ml-1" />

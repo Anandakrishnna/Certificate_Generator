@@ -1,5 +1,5 @@
-import { encryptSecret, decryptSecret } from "../src/lib/crypto.ts";
-import { verifySmtpConnection } from "../src/lib/email/email-service.ts";
+import { encryptSecret, decryptSecret } from "../src/lib/crypto";
+import { verifySmtpConnection } from "../src/lib/email/email-service";
 
 async function runHardeningTests() {
   console.log("=== Testing Security, Encryption & SMTP Hardening ===");

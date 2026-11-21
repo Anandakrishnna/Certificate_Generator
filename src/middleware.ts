@@ -5,10 +5,14 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get("certify_auth_token")?.value;
   const { pathname } = request.nextUrl;
 
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
+  const isAuthRoute =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password");
   const isProtectedRoute = pathname.startsWith("/dashboard") || pathname.startsWith("/events");
 
-  // Redirect to dashboard if logged in user attempts to access login/register
+  // Redirect to dashboard if logged in user attempts to access login/register/reset
   if (isAuthRoute && token) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
@@ -24,5 +28,12 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/events/:path*", "/login", "/register"],
+  matcher: [
+    "/dashboard/:path*",
+    "/events/:path*",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+  ],
 };

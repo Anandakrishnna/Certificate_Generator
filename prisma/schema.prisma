@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -42,13 +42,13 @@ model Participant {
   event            Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name             String
   email            String
-  extraFields      String          @default("{}") // Stored as JSON string in SQLite
+  extraFields      String          @default("{}") // Stored as JSON string
   validationStatus String          @default("valid") // valid | invalid | duplicate
   createdAt        DateTime        @default(now())
   certificates     Certificate[]
   emailDeliveries  EmailDelivery[]
 
-  @@unique([eventId, email])
+  @@index([eventId])
 }
 
 model Template {
@@ -56,7 +56,7 @@ model Template {
   eventId       String
   event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
   backgroundUrl String
-  placeholders  String        @default("[]") // JSON array of placeholder objects: { fieldKey, x, y, width, height, font, fontSize, color, align }
+  placeholders  String        @default("[]") // JSON array of placeholder objects
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   certificates  Certificate[]

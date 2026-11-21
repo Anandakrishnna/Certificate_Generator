@@ -48,7 +48,7 @@ model Participant {
   certificates     Certificate[]
   emailDeliveries  EmailDelivery[]
 
-  @@unique([eventId, email])
+  @@index([eventId])
 }
 
 model Template {

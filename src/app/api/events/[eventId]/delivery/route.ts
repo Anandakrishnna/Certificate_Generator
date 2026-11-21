@@ -44,6 +44,12 @@ export async function GET(
     const recipientList = event.participants.map((p) => {
       const cert = p.certificates[0] || null;
       const delivery = p.emailDeliveries[0] || null;
+      const extraFields = JSON.parse(p.extraFields || "{}");
+
+      const isDeliveredToLeader = Boolean(
+        extraFields.deliveredToLeader ||
+        (extraFields.isLeader === false && extraFields.leaderEmail && (!extraFields.memberEmail || p.email === extraFields.leaderEmail))
+      );
 
       const status = delivery ? delivery.status : "not_queued";
 
@@ -58,6 +64,13 @@ export async function GET(
         deliveryId: delivery?.id || null,
         name: p.name,
         email: p.email,
+        recipientEmail: extraFields.recipientEmail || p.email,
+        isLeader: extraFields.isLeader ?? true,
+        teamName: extraFields.teamName || null,
+        leaderName: extraFields.leaderName || null,
+        leaderEmail: extraFields.leaderEmail || null,
+        deliveredToLeader: isDeliveredToLeader,
+        role: extraFields.role || (extraFields.teamName ? (extraFields.isLeader ? "Team Leader" : "Team Member") : "Participant"),
         certificateId: cert?.id || null,
         certificateUid: cert?.certificateUid || null,
         status,

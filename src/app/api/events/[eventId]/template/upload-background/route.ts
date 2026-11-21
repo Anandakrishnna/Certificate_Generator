@@ -41,6 +41,16 @@ export async function POST(
     }
 
     const ext = path.extname(file.name).toLowerCase();
+    if (ext === ".pdf") {
+      return NextResponse.json(
+        {
+          error:
+            "PDF templates cannot be displayed directly on the visual certificate canvas. Please export or convert your certificate design to PNG or JPG (e.g. from Canva, Figma, PowerPoint, or Word) and upload the image.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (![".png", ".jpg", ".jpeg", ".svg"].includes(ext)) {
       return NextResponse.json(
         { error: "Only PNG, JPG, and SVG images are supported as certificate backgrounds." },

@@ -25,6 +25,8 @@ export function FileDropzone({
   const [isDragging, setIsDragging] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const isDroppingRef = React.useRef(false);
+  const dragCounterRef = React.useRef(0);
 
   const processFile = (file: File) => {
     setError(null);
@@ -38,15 +40,17 @@ export function FileDropzone({
       ".ods",
       ".xlsm",
       ".xlsb",
+      ".pdf",
     ];
 
+    const lowerName = file.name.toLowerCase();
     const hasValidExt = validExtensions.some((ext) =>
-      file.name.toLowerCase().endsWith(ext)
+      lowerName.endsWith(ext)
     );
 
     if (!hasValidExt) {
       setError(
-        "Supported formats: Excel (.xlsx, .xls, .ods), CSV (.csv), or TSV/Tab-delimited text files (.tsv, .txt)."
+        "Supported formats: Excel (.xlsx, .xls), CSV (.csv), TSV (.tsv), or PDF tables (.pdf)."
       );
       return;
     }
@@ -59,24 +63,53 @@ export function FileDropzone({
     onFileSelected(file);
   };
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = "copy";
+    }
+    setIsDragging(true);
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = "copy";
+    }
     setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragging(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    dragCounterRef.current = 0;
     setIsDragging(false);
 
-    // 1. Check if user dropped actual files from other applications (Explorer, Finder, Desktop, Mail)
+    // Suppress subsequent synthetic click from opening file picker
+    isDroppingRef.current = true;
+    setTimeout(() => {
+      isDroppingRef.current = false;
+    }, 300);
+
+    // Mark native event so window listener does not duplicate upload
+    if (e.nativeEvent) {
+      (e.nativeEvent as any).__handledByDropzone = true;
+    }
+
+    // 1. Check if user dropped actual files from other applications
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       processFile(e.dataTransfer.files[0]);
       return;
@@ -94,6 +127,11 @@ export function FileDropzone({
     }
 
     setError("No valid spreadsheet file or table data detected in the drop.");
+  };
+
+  const handleContainerClick = () => {
+    if (isDroppingRef.current) return;
+    fileInputRef.current?.click();
   };
 
   // Support Ctrl+V paste from Excel / Google Sheets
@@ -154,10 +192,11 @@ export function FileDropzone({
   return (
     <div className="space-y-4">
       <div
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={handleContainerClick}
         className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all relative overflow-hidden ${
           isDragging
             ? "border-indigo-600 bg-indigo-50/70 scale-[1.01] shadow-lg ring-4 ring-indigo-100"
@@ -167,7 +206,7 @@ export function FileDropzone({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv, .xlsx, .xls, .tsv, .txt, .ods, .tab"
+          accept=".csv, .xlsx, .xls, .tsv, .txt, .ods, .tab, .pdf"
           className="hidden"
           onChange={handleFileChange}
         />

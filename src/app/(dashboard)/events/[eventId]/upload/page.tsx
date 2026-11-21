@@ -33,6 +33,7 @@ export default function ParticipantUploadPage({
   const [error, setError] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
   const [isWindowDragging, setIsWindowDragging] = React.useState(false);
+  const lastUploadTimeRef = React.useRef(0);
 
   // Global window drag & drop handler for seamless drag from other apps
   React.useEffect(() => {
@@ -40,8 +41,8 @@ export default function ParticipantUploadPage({
 
     const handleDragEnter = (e: DragEvent) => {
       e.preventDefault();
-      dragCounter++;
-      if (e.dataTransfer && e.dataTransfer.types.length > 0) {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files")) {
+        dragCounter++;
         setIsWindowDragging(true);
       }
     };
@@ -57,12 +58,20 @@ export default function ParticipantUploadPage({
 
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
     };
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
       dragCounter = 0;
       setIsWindowDragging(false);
+
+      // Skip if event was already handled by the dropzone component
+      if ((e as any).__handledByDropzone) {
+        return;
+      }
 
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
         handleFileSelected(e.dataTransfer.files[0]);
@@ -105,8 +114,25 @@ export default function ParticipantUploadPage({
   }, [fetchExisting]);
 
   const handleFileSelected = async (file: File) => {
+    // Debounce duplicate drop / concurrent uploads
+    const now = Date.now();
+    if (now - lastUploadTimeRef.current < 600) {
+      return;
+    }
+    lastUploadTimeRef.current = now;
+
     setError(null);
     setSuccessMessage(null);
+
+    const lowerName = file.name.toLowerCase();
+    const imageExts = [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"];
+    if (imageExts.some((ext) => lowerName.endsWith(ext)) || file.type.startsWith("image/")) {
+      setError(
+        "You uploaded an image file. The Participants step requires an Excel (.xlsx, .xls), CSV (.csv), or PDF (.pdf) table containing participant names and emails. If you want to upload a certificate design template, please go to the 'Template' tab."
+      );
+      return;
+    }
+
     setUploading(true);
 
     try {
@@ -156,7 +182,11 @@ export default function ParticipantUploadPage({
     }
   };
 
-  const handleRemapColumns = async (nameCol: string, emailCol: string) => {
+  const handleRemapColumns = async (
+    nameCol: string,
+    emailCol: string,
+    isTeamMode?: boolean
+  ) => {
     if (!report || !report.rawRows) return;
     setUploading(true);
     try {
@@ -167,6 +197,7 @@ export default function ParticipantUploadPage({
           rawRows: report.rawRows,
           nameColumn: nameCol,
           emailColumn: emailCol,
+          isTeamMode: isTeamMode !== undefined ? isTeamMode : report.isTeamMode,
           sheetNames: report.sheetNames,
           activeSheetName: report.activeSheetName,
         }),
@@ -203,6 +234,12 @@ export default function ParticipantUploadPage({
           name: r.name,
           email: r.email,
           extraFields: r.extraFields,
+          isLeader: r.isLeader,
+          teamName: r.teamName,
+          leaderName: r.leaderName,
+          leaderEmail: r.leaderEmail,
+          recipientEmail: r.recipientEmail,
+          deliveredToLeader: r.deliveredToLeader,
         }));
 
       if (validParticipants.length === 0) {
@@ -242,7 +279,22 @@ export default function ParticipantUploadPage({
     <div className="space-y-6 relative">
       {/* Full-Window Drag & Drop Overlay */}
       {isWindowDragging && (
-        <div className="fixed inset-0 z-50 bg-indigo-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white border-4 border-dashed border-white m-4 rounded-3xl pointer-events-none transition-all">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer) {
+              e.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsWindowDragging(false);
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              handleFileSelected(e.dataTransfer.files[0]);
+            }
+          }}
+          className="fixed inset-0 z-50 bg-indigo-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white border-4 border-dashed border-white m-4 rounded-3xl transition-all"
+        >
           <UploadCloud className="h-20 w-20 text-white animate-bounce mb-4" />
           <h3 className="text-2xl font-extrabold tracking-tight">Drop Spreadsheet Anywhere to Upload</h3>
           <p className="text-sm text-indigo-200 mt-2">

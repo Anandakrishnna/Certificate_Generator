@@ -38,13 +38,34 @@ export async function POST(
 
       // Bulk create new confirmed participants
       await tx.participant.createMany({
-        data: participants.map((p: any) => ({
-          eventId: params.eventId,
-          name: p.name.trim(),
-          email: p.email.trim().toLowerCase(),
-          extraFields: JSON.stringify(p.extraFields || {}),
-          validationStatus: "valid",
-        })),
+        data: participants.map((p: any) => {
+          const leaderEmail =
+            p.leaderEmail || p.extraFields?.leaderEmail || "";
+          const recipientEmail =
+            p.recipientEmail || p.email || leaderEmail || "";
+          const isDeliveredToLeader =
+            p.deliveredToLeader ??
+            (p.isLeader === false && !p.email && Boolean(leaderEmail));
+
+          return {
+            eventId: params.eventId,
+            name: p.name.trim(),
+            email: (p.email || recipientEmail).trim().toLowerCase(),
+            extraFields: JSON.stringify({
+              ...(p.extraFields || {}),
+              teamName: p.teamName || p.extraFields?.teamName,
+              isLeader: p.isLeader ?? p.extraFields?.isLeader,
+              leaderName: p.leaderName || p.extraFields?.leaderName,
+              leaderEmail: leaderEmail || undefined,
+              recipientEmail: recipientEmail || undefined,
+              deliveredToLeader: isDeliveredToLeader,
+              role:
+                p.extraFields?.role ||
+                (p.isLeader ? "Team Leader" : p.teamName ? "Team Member" : "Participant"),
+            }),
+            validationStatus: "valid",
+          };
+        }),
       });
     });
 

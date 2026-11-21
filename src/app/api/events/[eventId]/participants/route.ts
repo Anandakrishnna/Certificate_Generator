@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
-import { parseSpreadsheetBuffer } from "@/lib/parser/spreadsheet-parser";
+import {
+  parseSpreadsheetBuffer,
+  detectTeamColumns,
+  expandTeamRows,
+} from "@/lib/parser/spreadsheet-parser";
 import { validateParticipantRows } from "@/lib/parser/validator";
 
 export async function GET(
@@ -69,19 +73,67 @@ export async function POST(
       // If user pasted raw text / TSV directly
       if (body.rawText) {
         const buffer = Buffer.from(body.rawText, "utf-8");
-        const report = parseSpreadsheetBuffer(buffer, "pasted_data.tsv", {
+        const report = await parseSpreadsheetBuffer(buffer, "pasted_data.tsv", {
           nameColumn: body.nameColumn,
           emailColumn: body.emailColumn,
+          isTeamMode: body.isTeamMode,
+          teamColumn: body.teamColumn,
         });
         return NextResponse.json({ report });
       }
 
-      // If re-mapping existing parsed rows with new name/email columns
-      if (body.rawRows && body.nameColumn && body.emailColumn) {
+      // If re-mapping existing parsed rows with new name/email columns or toggling team mode
+      if (body.rawRows) {
         const rawJsonRows: Record<string, any>[] = body.rawRows;
         const allColumns = Object.keys(rawJsonRows[0] || {});
+        const isTeamMode = Boolean(body.isTeamMode);
+
+        if (isTeamMode) {
+          const teamConfig = detectTeamColumns(allColumns, {
+            isTeamMode: true,
+            teamColumn: body.teamColumn,
+            leaderNameColumn: body.nameColumn || body.leaderNameColumn,
+            leaderEmailColumn: body.emailColumn || body.leaderEmailColumn,
+          });
+
+          if (teamConfig) {
+            const rawRows = expandTeamRows(rawJsonRows, teamConfig, allColumns);
+            const report = validateParticipantRows(
+              rawRows,
+              {
+                nameColumn: teamConfig.leaderNameColumn,
+                emailColumn: teamConfig.leaderEmailColumn,
+                teamColumn: teamConfig.teamColumn,
+                leaderNameColumn: teamConfig.leaderNameColumn,
+                leaderEmailColumn: teamConfig.leaderEmailColumn,
+                memberColumns: teamConfig.memberColumns,
+                extraColumns: allColumns.filter(
+                  (c) =>
+                    c !== teamConfig.teamColumn &&
+                    c !== teamConfig.leaderNameColumn &&
+                    c !== teamConfig.leaderEmailColumn &&
+                    !teamConfig.memberColumns.some(
+                      (m) => m.nameCol === c || m.emailCol === c
+                    )
+                ),
+                allColumns,
+              },
+              {
+                rawRows: rawJsonRows,
+                sheetNames: body.sheetNames,
+                activeSheetName: body.activeSheetName,
+                isTeamMode: true,
+              }
+            );
+            return NextResponse.json({ report });
+          }
+        }
+
+        // Standard 1-participant-per-row mode
+        const nameCol = body.nameColumn || allColumns[0];
+        const emailCol = body.emailColumn || allColumns[1] || allColumns[0];
         const extraColumns = allColumns.filter(
-          (c) => c !== body.nameColumn && c !== body.emailColumn
+          (c) => c !== nameCol && c !== emailCol
         );
 
         const rawRows = rawJsonRows.map((row, idx) => {
@@ -93,8 +145,8 @@ export async function POST(
           }
           return {
             rowNumber: idx + 2,
-            rawName: String(row[body.nameColumn] || "").trim(),
-            rawEmail: String(row[body.emailColumn] || "").trim(),
+            rawName: String(row[nameCol] || "").trim(),
+            rawEmail: String(row[emailCol] || "").trim(),
             extraFields,
           };
         });
@@ -102,8 +154,8 @@ export async function POST(
         const report = validateParticipantRows(
           rawRows,
           {
-            nameColumn: body.nameColumn,
-            emailColumn: body.emailColumn,
+            nameColumn: nameCol,
+            emailColumn: emailCol,
             extraColumns,
             allColumns,
           },
@@ -111,6 +163,7 @@ export async function POST(
             rawRows: rawJsonRows,
             sheetNames: body.sheetNames,
             activeSheetName: body.activeSheetName,
+            isTeamMode: false,
           }
         );
 
@@ -129,6 +182,8 @@ export async function POST(
     const nameColumn = (formData.get("nameColumn") as string) || undefined;
     const emailColumn = (formData.get("emailColumn") as string) || undefined;
     const sheetName = (formData.get("sheetName") as string) || undefined;
+    const isTeamMode =
+      formData.get("isTeamMode") === "true" ? true : undefined;
 
     if (!file) {
       return NextResponse.json(
@@ -147,10 +202,11 @@ export async function POST(
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const report = parseSpreadsheetBuffer(buffer, file.name, {
+    const report = await parseSpreadsheetBuffer(buffer, file.name, {
       nameColumn,
       emailColumn,
       sheetName,
+      isTeamMode,
     });
 
     return NextResponse.json({ report });

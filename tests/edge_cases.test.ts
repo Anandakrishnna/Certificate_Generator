@@ -23,6 +23,8 @@ async function runPhase10EdgeCaseTests() {
   for (const name of unicodeNames) {
     const placeholders = [
       {
+        id: "p1",
+        label: "Name",
         fieldKey: "{{name}}",
         x: 100,
         y: 200,
@@ -77,6 +79,8 @@ async function runPhase10EdgeCaseTests() {
 
   const placeholdersLong = [
     {
+      id: "p2",
+      label: "Name",
       fieldKey: "{{name}}",
       x: 100,
       y: 200,
@@ -118,7 +122,7 @@ async function runPhase10EdgeCaseTests() {
     csvLines.push(`Attendee Number ${i},attendee_${i}@university.edu,${i % 10 === 0 ? "Speaker" : "Participant"}`);
   }
   const largeCsvBuffer = Buffer.from(csvLines.join("\n"), "utf-8");
-  const report = parseSpreadsheetBuffer(largeCsvBuffer, "large_participants.csv");
+  const report = await parseSpreadsheetBuffer(largeCsvBuffer, "large_participants.csv");
 
   console.log(`   Processed rows: ${report.totalRows} (Valid: ${report.validCount}, Invalid: ${report.invalidCount})`);
 
@@ -139,7 +143,7 @@ First Instance,duplicate@example.com
 Second Instance,duplicate@example.com
 Unique Person,unique@example.com`;
 
-  const dupReport = parseSpreadsheetBuffer(Buffer.from(duplicateCsv, "utf-8"), "dup.csv");
+  const dupReport = await parseSpreadsheetBuffer(Buffer.from(duplicateCsv, "utf-8"), "dup.csv");
   if (dupReport.duplicateCount !== 2) {
     throw new Error(`Expected 2 duplicate rows flagged, got ${dupReport.duplicateCount}`);
   }

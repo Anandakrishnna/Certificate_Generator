@@ -1,7 +1,7 @@
 import { parseSpreadsheetBuffer } from "../src/lib/parser/spreadsheet-parser.js";
 import * as XLSX from "xlsx";
 
-function runParserTests() {
+async function runParserTests() {
   console.log("=== Testing Phase 4: Spreadsheet Parser & Validation Engine ===");
 
   // 1. Test CSV with mixed header casing, aliases, invalid emails, and duplicates
@@ -14,7 +14,7 @@ Charlie Brown,alice@university.edu,Honorable Mention,Stanford
 Diana Prince,diana.prince@dc.com,Participant,Gotham College`;
 
   const csvBuffer = Buffer.from(sampleCsv, "utf-8");
-  const csvReport = parseSpreadsheetBuffer(csvBuffer, "participants.csv");
+  const csvReport = await parseSpreadsheetBuffer(csvBuffer, "participants.csv");
 
   console.log(`✓ Total rows detected: ${csvReport.totalRows} (Expected: 5)`);
   if (csvReport.totalRows !== 5) throw new Error("Expected 5 rows in CSV");
@@ -67,7 +67,7 @@ Diana Prince,diana.prince@dc.com,Participant,Gotham College`;
   XLSX.utils.book_append_sheet(wb, ws, "Attendees");
   const xlsxBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
-  const xlsxReport = parseSpreadsheetBuffer(xlsxBuffer, "attendees.xlsx");
+  const xlsxReport = await parseSpreadsheetBuffer(xlsxBuffer, "attendees.xlsx");
   if (xlsxReport.totalRows !== 2 || xlsxReport.validCount !== 2) {
     throw new Error(`XLSX parsing failed! Total: ${xlsxReport.totalRows}, Valid: ${xlsxReport.validCount}`);
   }
@@ -76,9 +76,7 @@ Diana Prince,diana.prince@dc.com,Participant,Gotham College`;
   console.log("\n>>> ALL PHASE 4 PARSER & VALIDATION TESTS PASSED! <<<");
 }
 
-try {
-  runParserTests();
-} catch (err) {
+runParserTests().catch((err) => {
   console.error("Test error:", err);
   process.exit(1);
-}
+});

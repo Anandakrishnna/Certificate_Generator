@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { error: "No account found with this email. Please check your spelling or sign up." },
         { status: 401 }
       );
     }
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const isMatch = await comparePassword(password, user.passwordHash);
     if (!isMatch) {
       return NextResponse.json(
-        { error: "Invalid email or password." },
+        { error: "Incorrect password. Please try again or click 'Forgot password?' below." },
         { status: 401 }
       );
     }

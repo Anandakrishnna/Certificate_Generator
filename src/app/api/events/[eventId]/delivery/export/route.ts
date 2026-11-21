@@ -36,7 +36,10 @@ export async function GET(
 
     const headers = [
       "Participant_Name",
-      "Email_Address",
+      "Team_Name",
+      "Role",
+      "Participant_Email",
+      "Delivered_To_Email",
       "Certificate_UID",
       "Delivery_Status",
       "Attempt_Count",
@@ -56,10 +59,19 @@ export async function GET(
     for (const p of event.participants) {
       const cert = p.certificates[0] || null;
       const delivery = p.emailDeliveries[0] || null;
+      const extraFields = JSON.parse(p.extraFields || "{}");
+
+      const recipientEmail = extraFields.recipientEmail || p.email;
+      const role =
+        extraFields.role ||
+        (extraFields.teamName ? (extraFields.isLeader ? "Team Leader" : "Team Member") : "Participant");
 
       const row = [
         escapeCsv(p.name),
+        escapeCsv(extraFields.teamName || ""),
+        escapeCsv(role),
         escapeCsv(p.email),
+        escapeCsv(recipientEmail),
         escapeCsv(cert?.certificateUid || "N/A"),
         escapeCsv(delivery?.status || "not_queued"),
         delivery?.attemptCount || 0,

@@ -31,9 +31,23 @@ export async function processSingleDelivery(
   const author = event.author;
   const extraFields = JSON.parse(participant.extraFields || "{}");
 
+  const isDeliveredToLeader = Boolean(
+    extraFields.deliveredToLeader ||
+    (extraFields.isLeader === false && extraFields.leaderEmail && (!extraFields.memberEmail || participant.email === extraFields.leaderEmail))
+  );
+
+  const recipientEmail =
+    extraFields.recipientEmail ||
+    participant.email ||
+    extraFields.leaderEmail;
+
   const variables: Record<string, string> = {
     name: participant.name,
-    email: participant.email,
+    email: recipientEmail,
+    participant_name: participant.name,
+    team_name: extraFields.teamName || "Team",
+    leader_name: extraFields.leaderName || "Team Leader",
+    leader_email: extraFields.leaderEmail || "",
     event_name: event.name,
     organizer: event.organizerName || author?.name || "Organizer",
     date: new Date(event.eventDate).toLocaleDateString(undefined, {
@@ -49,9 +63,25 @@ export async function processSingleDelivery(
   const subjectTemplate = templateConfig?.subject || DEFAULT_EMAIL_TEMPLATE.subject;
   const bodyTemplate = templateConfig?.body || DEFAULT_EMAIL_TEMPLATE.body;
 
-  const subject = interpolateEmail(subjectTemplate, variables);
-  const plainBody = interpolateEmail(bodyTemplate, variables);
-  const htmlBody = formatHtmlEmail(plainBody);
+  let subject = interpolateEmail(subjectTemplate, variables);
+  let plainBody = interpolateEmail(bodyTemplate, variables);
+  let htmlBody = formatHtmlEmail(plainBody);
+
+  if (isDeliveredToLeader && extraFields.leaderEmail) {
+    subject = `[Team: ${extraFields.teamName || "Certificate"}] ${participant.name} - ${subject}`;
+    const leaderNoticePlain = `[TEAM CERTIFICATE NOTICE]\nHello ${extraFields.leaderName || "Team Leader"},\nThis certificate has been issued to your team member: ${participant.name} (${extraFields.teamName || "Team"}). Because their email was not provided, this certificate has been delivered to you. Please forward or present this certificate to them.\n\n----------------------------------------\n\n`;
+    plainBody = leaderNoticePlain + plainBody;
+
+    const leaderNoticeHtml = `
+      <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <p style="margin: 0 0 6px 0; font-weight: 700; color: #065f46; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">👑 Team Member Certificate Notice</p>
+        <p style="margin: 0; color: #047857; font-size: 13px; line-height: 1.5;">
+          Hello <strong>${extraFields.leaderName || "Team Leader"}</strong>, this certificate was awarded to your team member <strong>${participant.name}</strong> (${extraFields.teamName || "Team"}). Because their email was not provided, it has been delivered directly to you.
+        </p>
+      </div>
+    `;
+    htmlBody = leaderNoticeHtml + htmlBody;
+  }
 
   // Load PDF attachment buffer
   let pdfBuffer: Buffer | null = null;
@@ -101,7 +131,7 @@ export async function processSingleDelivery(
       : undefined);
 
   const result = await emailService.sendEmail({
-    to: participant.email,
+    to: recipientEmail,
     from: fromAddress,
     replyTo: author?.email || author?.smtpUser || undefined,
     subject,

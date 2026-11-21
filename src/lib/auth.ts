@@ -11,6 +11,12 @@ export interface TokenPayload {
   name: string;
 }
 
+export interface ResetTokenPayload {
+  userId: string;
+  email: string;
+  purpose: "password_reset";
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = await bcrypt.genSalt(10);
   return bcrypt.hash(password, salt);
@@ -30,6 +36,26 @@ export function signToken(payload: TokenPayload): string {
 export function verifyToken(token: string): TokenPayload | null {
   try {
     return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function signPasswordResetToken(payload: { userId: string; email: string }): string {
+  return jwt.sign(
+    { userId: payload.userId, email: payload.email, purpose: "password_reset" },
+    JWT_SECRET,
+    { expiresIn: "1h" }
+  );
+}
+
+export function verifyPasswordResetToken(token: string): ResetTokenPayload | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    if (decoded && decoded.purpose === "password_reset") {
+      return decoded as ResetTokenPayload;
+    }
+    return null;
   } catch (error) {
     return null;
   }

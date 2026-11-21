@@ -1,7 +1,7 @@
 import { parseSpreadsheetBuffer } from "../src/lib/parser/spreadsheet-parser";
 import * as XLSX from "xlsx";
 
-function runParserTests() {
+async function runParserTests() {
   console.log("=== Testing Universal Spreadsheet Parser & Cross-App Support ===");
 
   // 1. Standard CSV with aliases
@@ -14,7 +14,7 @@ Charlie Brown,alice@university.edu,Honorable Mention,Stanford
 Diana Prince,diana.prince@dc.com,Participant,Gotham College`;
 
   const csvBuffer = Buffer.from(sampleCsv, "utf-8");
-  const csvReport = parseSpreadsheetBuffer(csvBuffer, "participants.csv");
+  const csvReport = await parseSpreadsheetBuffer(csvBuffer, "participants.csv");
 
   if (csvReport.totalRows !== 5) throw new Error("Expected 5 rows in CSV");
   console.log("✓ CSV with aliases parsed successfully");
@@ -25,7 +25,7 @@ Diana Prince,diana.prince@dc.com,Participant,Gotham College`;
 Liam Vance,liam.vance@company.com,Engineering
 Sophia Lee,sophia.lee@company.com,Design`;
 
-  const nonStandardReport = parseSpreadsheetBuffer(
+  const nonStandardReport = await parseSpreadsheetBuffer(
     Buffer.from(nonStandardCsv, "utf-8"),
     "members.csv"
   );
@@ -43,7 +43,7 @@ Sophia Lee,sophia.lee@company.com,Design`;
   // 3. Tab-Separated Values (TSV) from dragging or pasting from Excel / Google Sheets
   console.log("3. Testing TSV / raw text data dragged/pasted from Excel or Google Sheets...");
   const tsvData = "Full Name\tWork Email\tRole\nJohn Wick\tjohn.wick@continental.com\tLead\nNeo Anderson\tneo@matrix.io\tArchitect";
-  const tsvReport = parseSpreadsheetBuffer(Buffer.from(tsvData, "utf-8"), "pasted_data.tsv");
+  const tsvReport = await parseSpreadsheetBuffer(Buffer.from(tsvData, "utf-8"), "pasted_data.tsv");
 
   if (tsvReport.totalRows !== 2 || tsvReport.validCount !== 2) {
     throw new Error("TSV / Excel pasted text parsing failed!");
@@ -64,7 +64,7 @@ Sophia Lee,sophia.lee@company.com,Design`;
   XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
   const complexXlsxBuffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
-  const complexReport = parseSpreadsheetBuffer(complexXlsxBuffer, "complex.xlsx");
+  const complexReport = await parseSpreadsheetBuffer(complexXlsxBuffer, "complex.xlsx");
   if (complexReport.totalRows !== 2 || complexReport.validCount !== 2) {
     throw new Error("Failed to auto-skip title banner row in Excel file!");
   }

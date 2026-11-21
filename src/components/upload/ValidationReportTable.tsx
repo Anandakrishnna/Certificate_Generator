@@ -6,10 +6,11 @@ import {
   AlertTriangle,
   AlertCircle,
   Check,
-  Filter,
   Columns,
-  Table,
-  Sparkles,
+  Crown,
+  User,
+  Users,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,11 @@ import {
 interface ValidationReportTableProps {
   report: ValidationReport;
   onRowsUpdated: (updatedRows: ValidatedParticipantRow[]) => void;
-  onRemapColumns: (nameCol: string, emailCol: string) => void;
+  onRemapColumns: (
+    nameCol: string,
+    emailCol: string,
+    isTeamMode?: boolean
+  ) => void;
   onConfirm: () => void;
   isSaving?: boolean;
 }
@@ -43,6 +48,7 @@ export function ValidationReportTable({
   const [selectedEmailCol, setSelectedEmailCol] = React.useState<string>(
     report.detectedColumns.emailColumn
   );
+  const isTeamMode = Boolean(report.isTeamMode);
 
   React.useEffect(() => {
     setRows(report.rows);
@@ -53,12 +59,17 @@ export function ValidationReportTable({
   // Handle re-mapping columns
   const handleNameColChange = (col: string) => {
     setSelectedNameCol(col);
-    onRemapColumns(col, selectedEmailCol);
+    onRemapColumns(col, selectedEmailCol, isTeamMode);
   };
 
   const handleEmailColChange = (col: string) => {
     setSelectedEmailCol(col);
-    onRemapColumns(selectedNameCol, col);
+    onRemapColumns(selectedNameCol, col, isTeamMode);
+  };
+
+  const handleToggleMode = (teamModeTarget: boolean) => {
+    if (teamModeTarget === isTeamMode) return;
+    onRemapColumns(selectedNameCol, selectedEmailCol, teamModeTarget);
   };
 
   // Inline editing of cells
@@ -70,33 +81,63 @@ export function ValidationReportTable({
       const errorReasons: string[] = [];
       const trimmedName = newRow.name.trim();
       const trimmedEmail = newRow.email.trim();
+      const isMember = r.isLeader === false;
+      const leaderEmail = (r.leaderEmail || "").trim();
+      const leaderEmailValid = Boolean(leaderEmail && RFC_EMAIL_REGEX.test(leaderEmail));
 
       if (!trimmedName) errorReasons.push("Participant name cannot be empty");
+
+      let deliveredToLeader = r.deliveredToLeader || false;
+      let recipientEmail = trimmedEmail;
+
       if (!trimmedEmail) {
-        errorReasons.push("Email address cannot be empty");
+        if (isMember && leaderEmailValid) {
+          deliveredToLeader = true;
+          recipientEmail = leaderEmail;
+        } else {
+          errorReasons.push("Email address cannot be empty");
+        }
       } else if (!RFC_EMAIL_REGEX.test(trimmedEmail)) {
-        errorReasons.push("Invalid email format (RFC compliance error)");
+        if (isMember && leaderEmailValid) {
+          deliveredToLeader = true;
+          recipientEmail = leaderEmail;
+          errorReasons.push("Invalid member email format; will route to team leader");
+        } else {
+          errorReasons.push("Invalid email format (RFC compliance error)");
+        }
+      } else {
+        deliveredToLeader = false;
+        recipientEmail = trimmedEmail;
       }
 
-      const duplicateCount = rows.filter(
-        (other) =>
-          other.id !== id &&
-          other.email.trim().toLowerCase() === trimmedEmail.toLowerCase()
-      ).length;
+      // Duplicate check (only for individual emails, excluding blank member fallbacks)
+      if (trimmedEmail && !deliveredToLeader) {
+        const duplicateCount = rows.filter(
+          (other) =>
+            other.id !== id &&
+            !other.deliveredToLeader &&
+            other.email.trim().toLowerCase() === trimmedEmail.toLowerCase()
+        ).length;
 
-      if (duplicateCount > 0) {
-        errorReasons.push("Duplicate email address detected in spreadsheet");
+        if (duplicateCount > 0) {
+          errorReasons.push("Duplicate email address detected in spreadsheet");
+        }
       }
 
       let status: "valid" | "invalid" | "duplicate" = "valid";
-      if (errorReasons.some((r) => r.includes("Duplicate"))) status = "duplicate";
-      if (errorReasons.some((r) => !r.includes("Duplicate"))) status = "invalid";
+      if (errorReasons.some((err) => err.includes("Duplicate"))) status = "duplicate";
+      const fatalErrors = errorReasons.filter(
+        (err) => !err.includes("Duplicate") && !err.includes("route to team leader")
+      );
+      if (fatalErrors.length > 0) status = "invalid";
 
       return {
         ...newRow,
         status,
         errorReasons,
         isExcluded: status !== "valid",
+        deliveredToLeader,
+        recipientEmail,
       };
     });
 
@@ -116,7 +157,7 @@ export function ValidationReportTable({
     const seen = new Set<string>();
     const updated = rows.map((r) => {
       const emailKey = r.email.trim().toLowerCase();
-      if (!emailKey || r.status === "invalid") return r;
+      if (!emailKey || r.status === "invalid" || r.deliveredToLeader) return r;
 
       if (!seen.has(emailKey)) {
         seen.add(emailKey);
@@ -157,6 +198,7 @@ export function ValidationReportTable({
   const validAndIncludedCount = rows.filter((r) => !r.isExcluded && r.status === "valid").length;
   const invalidCount = rows.filter((r) => r.status === "invalid").length;
   const duplicateCount = rows.filter((r) => r.status === "duplicate").length;
+  const teamMemberCount = rows.filter((r) => r.deliveredToLeader).length;
 
   const allColumns = report.detectedColumns.allColumns || [
     report.detectedColumns.nameColumn,
@@ -166,23 +208,67 @@ export function ValidationReportTable({
 
   return (
     <div className="space-y-6">
-      {/* Column Mapping Selector (Accepts any arbitrary spreadsheet format!) */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* Column Mapping & Mode Selector */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Columns className="h-4 w-4 text-indigo-400" />
-            <h4 className="text-sm font-bold tracking-tight">Spreadsheet Column Mapping</h4>
+            <h4 className="text-sm font-bold tracking-tight">Spreadsheet Parser & Mapping</h4>
           </div>
-          <span className="text-xs text-indigo-200">
-            Detected {allColumns.length} columns in file. You can change which column maps to Name or Email below.
-          </span>
+
+          {/* Mode Switcher */}
+          <div className="flex items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700/80">
+            <button
+              type="button"
+              onClick={() => handleToggleMode(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                !isTeamMode
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <User className="h-3.5 w-3.5" />
+              Standard Mode (1 per Row)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleMode(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                isTeamMode
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-slate-300 hover:text-white"
+              }`}
+            >
+              <Crown className="h-3.5 w-3.5 text-amber-300" />
+              Team Mode - Option C (Leader Routing)
+            </button>
+          </div>
         </div>
 
+        {/* Option C Banner */}
+        {isTeamMode && (
+          <div className="rounded-xl border border-indigo-400/30 bg-indigo-950/60 p-3.5 flex items-start gap-3 text-indigo-200">
+            <Crown className="h-5 w-5 text-amber-300 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <p className="font-bold text-white flex items-center gap-2">
+                <span>Option C: Team Mode Active</span>
+                <span className="text-[10px] bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-400/30 font-medium">
+                  Group Leader Email Fallback
+                </span>
+              </p>
+              <p className="mt-1 text-indigo-200/90 leading-relaxed">
+                Each team row in your spreadsheet was expanded into individual certificates for the <strong>Leader</strong> and <strong>Members</strong>.
+                If any team member does not have their own email provided, their certificate will automatically be dispatched to the <strong>Team Leader's email</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Column Selectors */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-700/60">
-          {/* Name Column Selector */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <span>Map Participant Name to Column:</span>
+              <span>{isTeamMode ? "Leader Name Column:" : "Participant Name Column:"}</span>
               <Badge variant="info" className="text-[10px] bg-indigo-500/30 text-indigo-200 border-indigo-400">
                 Primary
               </Badge>
@@ -200,10 +286,9 @@ export function ValidationReportTable({
             </select>
           </div>
 
-          {/* Email Column Selector */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <span>Map Participant Email to Column:</span>
+              <span>{isTeamMode ? "Leader Email Column (Fallback):" : "Participant Email Column:"}</span>
               <Badge variant="info" className="text-[10px] bg-indigo-500/30 text-indigo-200 border-indigo-400">
                 Primary
               </Badge>
@@ -224,9 +309,9 @@ export function ValidationReportTable({
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Card className="p-4 bg-white shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Total Rows</div>
+          <div className="text-xs text-slate-500 font-medium">Total Participants</div>
           <div className="text-2xl font-bold text-slate-900 mt-1">{rows.length}</div>
         </Card>
         <Card className="p-4 bg-emerald-50/50 border-emerald-200 shadow-xs">
@@ -237,6 +322,16 @@ export function ValidationReportTable({
             {validAndIncludedCount}
           </div>
         </Card>
+        {isTeamMode && (
+          <Card className="p-4 bg-amber-50/50 border-amber-200 shadow-xs">
+            <div className="text-xs text-amber-800 font-medium flex items-center gap-1">
+              <Mail className="h-3.5 w-3.5 text-amber-600" /> Routes to Leader
+            </div>
+            <div className="text-2xl font-bold text-amber-800 mt-1">
+              {teamMemberCount}
+            </div>
+          </Card>
+        )}
         <Card className="p-4 bg-rose-50/50 border-rose-200 shadow-xs">
           <div className="text-xs text-rose-700 font-medium flex items-center gap-1">
             <AlertCircle className="h-3.5 w-3.5" /> Invalid Format
@@ -258,37 +353,31 @@ export function ValidationReportTable({
           <button
             onClick={() => setFilter("all")}
             className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-              filter === "all"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
+              filter === "all" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
             All ({rows.length})
           </button>
           <button
-            onClick={() => setFilter("flagged")}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-              filter === "flagged"
-                ? "bg-white text-rose-700 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Needs Attention ({invalidCount + duplicateCount})
-          </button>
-          <button
             onClick={() => setFilter("valid")}
             className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-              filter === "valid"
-                ? "bg-white text-emerald-700 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
+              filter === "valid" ? "bg-white text-emerald-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            Valid Only ({validAndIncludedCount})
+            Ready ({validAndIncludedCount})
+          </button>
+          <button
+            onClick={() => setFilter("flagged")}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              filter === "flagged" ? "bg-white text-rose-700 shadow-xs" : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            Flagged ({invalidCount + duplicateCount})
           </button>
         </div>
 
-        {/* Quick Batch Actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
           {duplicateCount > 0 && (
             <Button
               variant="outline"
@@ -296,7 +385,7 @@ export function ValidationReportTable({
               onClick={handleKeepFirstDuplicate}
               className="text-xs gap-1 border-amber-300 text-amber-800 hover:bg-amber-50"
             >
-              <Check className="h-3.5 w-3.5" /> Keep First of Duplicates
+              Keep 1st Duplicate
             </Button>
           )}
           {(invalidCount > 0 || duplicateCount > 0) && (
@@ -329,11 +418,11 @@ export function ValidationReportTable({
               <tr>
                 <th className="py-3 px-4 w-12 text-center">Include</th>
                 <th className="py-3 px-4 w-16">Row</th>
-                <th className="py-3 px-4 min-w-[200px]">Name (Column: {selectedNameCol})</th>
-                <th className="py-3 px-4 min-w-[240px]">Email (Column: {selectedEmailCol})</th>
-                <th className="py-3 px-4 min-w-[140px]">Extra Data</th>
+                <th className="py-3 px-4 min-w-[200px]">Participant Name</th>
+                <th className="py-3 px-4 min-w-[260px]">Delivery Email Address</th>
+                <th className="py-3 px-4 min-w-[140px]">Team & Metadata</th>
                 <th className="py-3 px-4 w-32">Status</th>
-                <th className="py-3 px-4 min-w-[200px]">Notes / Issues</th>
+                <th className="py-3 px-4 min-w-[200px]">Routing & Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -379,34 +468,71 @@ export function ValidationReportTable({
                             : "border-slate-200 focus:border-indigo-500 bg-transparent"
                         }`}
                       />
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        {r.teamName && (
+                          <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-medium border border-indigo-200">
+                            👥 {r.teamName}
+                          </span>
+                        )}
+                        {r.isLeader && (
+                          <span className="text-[10px] bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-semibold border border-amber-200">
+                            👑 Team Leader
+                          </span>
+                        )}
+                        {r.isLeader === false && (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium border border-slate-200">
+                            👤 Team Member
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-2 px-4">
-                      <input
-                        type="email"
-                        value={r.email}
-                        onChange={(e) => handleCellEdit(r.id, "email", e.target.value)}
-                        placeholder="email@example.com"
-                        className={`w-full px-2.5 py-1 text-xs rounded border transition-colors ${
-                          !r.email.trim() || !RFC_EMAIL_REGEX.test(r.email.trim())
-                            ? "border-rose-400 bg-rose-50 focus:border-rose-600"
-                            : "border-slate-200 focus:border-indigo-500 bg-transparent"
-                        }`}
-                      />
+                      {r.deliveredToLeader ? (
+                        <div className="space-y-1">
+                          <div className="text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded text-[11px] font-medium flex items-center gap-1.5">
+                            <Mail className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                            <span>
+                              Routes to Leader: <strong>{r.recipientEmail || r.leaderEmail}</strong>
+                            </span>
+                          </div>
+                          <input
+                            type="email"
+                            value={r.email}
+                            onChange={(e) => handleCellEdit(r.id, "email", e.target.value)}
+                            placeholder="Optional: enter direct email"
+                            className="w-full px-2.5 py-0.5 text-[11px] rounded border border-dashed border-slate-300 bg-white/80 focus:border-indigo-500 text-slate-600"
+                          />
+                        </div>
+                      ) : (
+                        <input
+                          type="email"
+                          value={r.email}
+                          onChange={(e) => handleCellEdit(r.id, "email", e.target.value)}
+                          placeholder="email@example.com"
+                          className={`w-full px-2.5 py-1 text-xs rounded border transition-colors ${
+                            !r.email.trim() || !RFC_EMAIL_REGEX.test(r.email.trim())
+                              ? "border-rose-400 bg-rose-50 focus:border-rose-600"
+                              : "border-slate-200 focus:border-indigo-500 bg-transparent"
+                          }`}
+                        />
+                      )}
                     </td>
 
                     <td className="py-2.5 px-4">
                       {Object.keys(r.extraFields).length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {Object.entries(r.extraFields).map(([k, v]) => (
-                            <span
-                              key={k}
-                              className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] text-slate-600"
-                              title={`${k}: ${v}`}
-                            >
-                              {k}: {String(v)}
-                            </span>
-                          ))}
+                          {Object.entries(r.extraFields)
+                            .filter(([k]) => !["teamName", "leaderName", "leaderEmail", "role", "recipientEmail", "memberEmail"].includes(k))
+                            .map(([k, v]) => (
+                              <span
+                                key={k}
+                                className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] text-slate-600"
+                                title={`${k}: ${v}`}
+                              >
+                                {k}: {String(v)}
+                              </span>
+                            ))}
                         </div>
                       ) : (
                         <span className="text-slate-400 text-[11px]">—</span>
@@ -441,9 +567,13 @@ export function ValidationReportTable({
                             </p>
                           ))}
                         </div>
+                      ) : r.deliveredToLeader ? (
+                        <span className="text-amber-700 font-medium text-[11px] flex items-center gap-1">
+                          <Check className="h-3 w-3 text-emerald-600" /> Will deliver to Leader ({r.recipientEmail || r.leaderEmail})
+                        </span>
                       ) : (
                         <span className="text-emerald-600 font-medium text-[11px] flex items-center gap-1">
-                          <Check className="h-3 w-3" /> Ready
+                          <Check className="h-3 w-3" /> Ready for direct send
                         </span>
                       )}
                     </td>
